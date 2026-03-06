@@ -1,10 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Header } from "@/components/layout/header"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -33,6 +35,10 @@ import {
 import { Plus, Search, Upload, Download, Phone, Loader2 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { ImportDialog } from "@/components/import-dialog"
+import { LeadBulkToolbar } from "@/components/leads/bulk-toolbar"
+import { BulkAssignDialog } from "@/components/leads/bulk-assign-dialog"
+import { BulkStageDialog } from "@/components/leads/bulk-stage-dialog"
+import { DeleteLeadDialog } from "@/components/leads/delete-lead-dialog"
 
 type Lead = {
   id: string
@@ -50,6 +56,7 @@ type Lead = {
 }
 
 type Project = { id: string; name: string }
+type OrgUser = { id: string; name: string }
 
 function getStageColor(stage: string) {
   switch (stage) {
@@ -72,18 +79,28 @@ function getPriorityLabel(priority: number) {
 }
 
 export default function LeadsPage() {
+  const router = useRouter()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [projects, setProjects] = useState<Project[]>([])
-  const [filters, setFilters] = useState({ stage: "", search: "" })
+  const [users, setUsers] = useState<OrgUser[]>([])
+  const [sources, setSources] = useState<string[]>([])
+  const [filters, setFilters] = useState({ stage: "", search: "", ownerUserId: "", source: "" })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ name: "", phone: "", email: "", source: "", projectId: "" })
   const [importOpen, setImportOpen] = useState(false)
 
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false)
+  const [bulkStageOpen, setBulkStageOpen] = useState(false)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+
   useEffect(() => {
     Promise.all([
       fetch("/api/projects").then((r) => r.json()).then(setProjects),
+      fetch("/api/users").then((r) => r.json()).then((data) => setUsers(Array.isArray(data) ? data : [])),
       fetchLeads(),
     ]).catch(console.error)
   }, [])
@@ -91,7 +108,7 @@ export default function LeadsPage() {
   useEffect(() => {
     fetchLeads()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.stage])
+  }, [filters.stage, filters.ownerUserId, filters.source])
 
   async function fetchLeads() {
     setLoading(true)
@@ -99,9 +116,15 @@ export default function LeadsPage() {
       const params = new URLSearchParams()
       if (filters.stage) params.set("stage", filters.stage)
       if (filters.search) params.set("search", filters.search)
+      if (filters.ownerUserId) params.set("ownerUserId", filters.ownerUserId)
+      if (filters.source) params.set("source", filters.source)
       const res = await fetch(`/api/leads?${params}`)
       const data = await res.json()
       setLeads(data.leads)
+      // Extract distinct sources for filter
+      const srcSet = new Set<string>()
+      data.leads.forEach((l: Lead) => { if (l.source) srcSet.add(l.source) })
+      setSources(Array.from(srcSet).sort())
     } catch (err) {
       console.error(err)
     } finally {
@@ -140,6 +163,49 @@ export default function LeadsPage() {
     fetchLeads()
   }
 
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === leads.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(leads.map((l) => l.id)))
+    }
+  }
+
+  function handleBulkSuccess() {
+    setSelected(new Set())
+    fetchLeads()
+  }
+
+  async function handleBulkDelete() {
+    try {
+      const res = await fetch("/api/leads/bulk", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || "Failed to delete")
+        return
+      }
+      handleBulkSuccess()
+    } catch (err) {
+      console.error(err)
+    }
+    setBulkDeleteOpen(false)
+  }
+
+  const selectedIds = Array.from(selected)
+
   return (
     <>
       <Header title="Leads" subtitle="Manage your lead pipeline" />
@@ -171,6 +237,30 @@ export default function LeadsPage() {
               <SelectItem value="BOOKED">Booked</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={filters.ownerUserId || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, ownerUserId: v === "all" ? "" : v }))}>
+            <SelectTrigger className="w-[calc(50%-4px)] sm:w-[150px]">
+              <SelectValue placeholder="Owner" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Owners</SelectItem>
+              {users.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {sources.length > 0 && (
+            <Select value={filters.source || "all"} onValueChange={(v) => setFilters((f) => ({ ...f, source: v === "all" ? "" : v }))}>
+              <SelectTrigger className="w-[calc(50%-4px)] sm:w-[150px]">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                {sources.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
             <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 sm:mr-2" />
@@ -241,6 +331,12 @@ export default function LeadsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-secondary/50">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={leads.length > 0 && selected.size === leads.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>Lead</TableHead>
                   <TableHead className="hidden md:table-cell">Contact</TableHead>
                   <TableHead className="hidden lg:table-cell">Source</TableHead>
@@ -254,8 +350,19 @@ export default function LeadsPage() {
               <TableBody>
                 {leads.map((lead) => {
                   const p = getPriorityLabel(lead.priority)
+                  const isSelected = selected.has(lead.id)
                   return (
-                    <TableRow key={lead.id} className="cursor-pointer">
+                    <TableRow
+                      key={lead.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/leads/${lead.id}`)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelect(lead.id)}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
@@ -295,7 +402,7 @@ export default function LeadsPage() {
                 })}
                 {leads.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No leads found
                     </TableCell>
                   </TableRow>
@@ -305,6 +412,45 @@ export default function LeadsPage() {
           </Card>
         )}
       </div>
+
+      {/* Bulk Toolbar */}
+      <LeadBulkToolbar
+        count={selected.size}
+        onClear={() => setSelected(new Set())}
+        onAssign={() => setBulkAssignOpen(true)}
+        onStageChange={() => setBulkStageOpen(true)}
+        onDelete={() => setBulkDeleteOpen(true)}
+      />
+
+      {/* Bulk Dialogs */}
+      <BulkAssignDialog
+        selectedIds={selectedIds}
+        open={bulkAssignOpen}
+        onOpenChange={setBulkAssignOpen}
+        onSuccess={handleBulkSuccess}
+      />
+      <BulkStageDialog
+        selectedIds={selectedIds}
+        open={bulkStageOpen}
+        onOpenChange={setBulkStageOpen}
+        onSuccess={handleBulkSuccess}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {selected.size} Lead(s)</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will archive the selected leads. Leads with active deals will not be deleted.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBulkDelete}>Delete</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ImportDialog
         open={importOpen}

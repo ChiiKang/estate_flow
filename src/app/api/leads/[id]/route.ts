@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import prisma from "@/lib/db"
 import { requireAuth, apiError, apiSuccess } from "@/lib/auth-utils"
 import { logActivity } from "@/lib/activity-logger"
+import { normalizePhone } from "@/lib/phone"
 
 export async function GET(
   req: NextRequest,
@@ -62,6 +63,32 @@ export async function PATCH(
     if (body.tags !== undefined) updateData.tags = body.tags
     if (body.projectId !== undefined) updateData.projectId = body.projectId
     if (body.nextFollowupAt !== undefined) updateData.nextFollowupAt = body.nextFollowupAt ? new Date(body.nextFollowupAt) : null
+    if (body.source !== undefined) updateData.source = body.source
+    if (body.campaign !== undefined) updateData.campaign = body.campaign
+
+    // Phone update with dedup
+    if (body.phone !== undefined) {
+      const phone = normalizePhone(body.phone)
+      if (phone.phoneE164 && phone.phoneE164 !== existing.phoneE164) {
+        const dup = await prisma.lead.findFirst({
+          where: { orgId: user.orgId, phoneE164: phone.phoneE164, deletedAt: null, id: { not: id } },
+        })
+        if (dup) return apiError("Another lead with this phone number already exists", 409)
+      }
+      updateData.phoneRaw = phone.phoneRaw
+      updateData.phoneE164 = phone.phoneE164
+    }
+
+    // Email update with dedup
+    if (body.email !== undefined) {
+      if (body.email && body.email !== existing.email) {
+        const dup = await prisma.lead.findFirst({
+          where: { orgId: user.orgId, email: body.email, deletedAt: null, id: { not: id } },
+        })
+        if (dup) return apiError("Another lead with this email already exists", 409)
+      }
+      updateData.email = body.email || null
+    }
 
     const lead = await prisma.lead.update({
       where: { id },
@@ -93,6 +120,48 @@ export async function PATCH(
     }
 
     return apiSuccess(lead)
+  } catch (error: any) {
+    if (error.message === "Unauthorized") return apiError("Unauthorized", 401)
+    return apiError(error.message, 500)
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await requireAuth()
+    const { id } = await params
+
+    const lead = await prisma.lead.findFirst({
+      where: { id, orgId: user.orgId, deletedAt: null },
+      include: {
+        deals: { where: { stage: { not: "CANCELLED" } } },
+      },
+    })
+
+    if (!lead) return apiError("Lead not found", 404)
+
+    if (lead.deals.length > 0) {
+      return apiError("Cannot delete lead with active deals. Cancel all deals first.", 400)
+    }
+
+    await prisma.lead.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    })
+
+    await logActivity({
+      orgId: user.orgId,
+      entityType: "LEAD",
+      entityId: id,
+      type: "UPDATED",
+      actorUserId: user.id,
+      data: { action: "soft_deleted" },
+    })
+
+    return apiSuccess({ success: true })
   } catch (error: any) {
     if (error.message === "Unauthorized") return apiError("Unauthorized", 401)
     return apiError(error.message, 500)
