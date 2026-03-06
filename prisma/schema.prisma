@@ -1,0 +1,544 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MANAGER
+  AGENT
+  FINANCE
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UnitStatus {
+  AVAILABLE
+  RESERVED
+  BOOKED
+  SOLD
+  CANCELLED
+}
+
+enum LockStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  CONVERTED
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  SITE_VISIT
+  UNIT_SELECTED
+  RESERVED
+  BOOKED
+  SPA_SIGNED
+  LOAN_SUBMITTED
+  LOAN_APPROVED
+  SOLD
+}
+
+enum DealStage {
+  RESERVED
+  BOOKED
+  SPA_SIGNED
+  LOAN_SUBMITTED
+  LOAN_APPROVED
+  SOLD
+  CANCELLED
+}
+
+enum DocStatus {
+  MISSING
+  RECEIVED
+  VERIFIED
+  REJECTED
+}
+
+enum PaymentType {
+  BOOKING_FEE
+  DOWNPAYMENT
+  PROGRESSIVE
+}
+
+enum PaymentStatus {
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+enum TaskType {
+  CALL
+  WHATSAPP
+  EMAIL
+  SITE_VISIT
+  DOC_REQUEST
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum ActivityEntityType {
+  LEAD
+  DEAL
+  UNIT
+}
+
+enum ActivityType {
+  NOTE
+  STAGE_CHANGE
+  TASK_CREATED
+  TASK_COMPLETED
+  MSG_LOGGED
+  DOC_UPLOADED
+  DOC_VERIFIED
+  PAYMENT_SUBMITTED
+  PAYMENT_VERIFIED
+  LOCK_CREATED
+  LOCK_EXPIRED
+  LOCK_CANCELLED
+  LOCK_CONVERTED
+  OVERRIDE
+  STATUS_CHANGE
+  ASSIGNMENT_CHANGE
+  CREATED
+  UPDATED
+}
+
+enum MessageChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+  CALL_LOG
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum ApprovalType {
+  DISCOUNT
+  LOCK_OVERRIDE
+  PRICE_OVERRIDE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalEntityType {
+  DEAL
+  UNIT
+  LOCK
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model Org {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users            User[]
+  teams            Team[]
+  projects         Project[]
+  units            Unit[]
+  unitLocks        UnitLock[]
+  leads            Lead[]
+  buyers           Buyer[]
+  deals            Deal[]
+  docTypes         DocType[]
+  dealDocs         DealDoc[]
+  payments         Payment[]
+  tasks            Task[]
+  activities       Activity[]
+  messages         Message[]
+  messageTemplates MessageTemplate[]
+  approvals        Approval[]
+
+  @@map("orgs")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  name      String
+  email     String
+  password  String
+  role      Role     @default(AGENT)
+  teamId    String?  @map("team_id") @db.Uuid
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  org  Org   @relation(fields: [orgId], references: [id])
+  team Team? @relation(fields: [teamId], references: [id])
+
+  lockedUnits        UnitLock[]   @relation("LockedByUser")
+  assignedLeads      Lead[]       @relation("LeadOwner")
+  assignedDeals      Deal[]       @relation("DealAssignee")
+  assignedTasks      Task[]       @relation("TaskAssignee")
+  activities         Activity[]   @relation("ActivityActor")
+  verifiedDocs       DealDoc[]    @relation("DocVerifier")
+  verifiedPayments   Payment[]    @relation("PaymentVerifier")
+  requestedApprovals Approval[]   @relation("ApprovalRequester")
+  decidedApprovals   Approval[]   @relation("ApprovalDecider")
+
+  @@unique([orgId, email])
+  @@map("users")
+}
+
+model Team {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  org   Org    @relation(fields: [orgId], references: [id])
+  users User[]
+
+  @@map("teams")
+}
+
+model Project {
+  id        String        @id @default(uuid()) @db.Uuid
+  orgId     String        @map("org_id") @db.Uuid
+  name      String
+  location  String?
+  status    ProjectStatus @default(ACTIVE)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  org              Org               @relation(fields: [orgId], references: [id])
+  units            Unit[]
+  leads            Lead[]
+  deals            Deal[]
+  docTypes         DocType[]
+  messageTemplates MessageTemplate[]
+
+  @@map("projects")
+}
+
+model Unit {
+  id           String     @id @default(uuid()) @db.Uuid
+  orgId        String     @map("org_id") @db.Uuid
+  projectId    String     @map("project_id") @db.Uuid
+  tower        String
+  floor        String
+  unitNo       String     @map("unit_no")
+  unitType     String     @map("unit_type")
+  sizeSqm      Decimal?   @map("size_sqm") @db.Decimal(10, 2)
+  facing       String?
+  basePrice    Decimal    @map("base_price") @db.Decimal(14, 2)
+  currentPrice Decimal    @map("current_price") @db.Decimal(14, 2)
+  status       UnitStatus @default(AVAILABLE)
+  metadata     Json?      @db.JsonB
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  org     Org     @relation(fields: [orgId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  locks UnitLock[]
+  deals Deal[]
+
+  @@unique([projectId, tower, floor, unitNo])
+  @@index([orgId, status])
+  @@map("units")
+}
+
+model UnitLock {
+  id             String     @id @default(uuid()) @db.Uuid
+  orgId          String     @map("org_id") @db.Uuid
+  unitId         String     @map("unit_id") @db.Uuid
+  lockedByUserId String     @map("locked_by_user_id") @db.Uuid
+  dealId         String?    @map("deal_id") @db.Uuid
+  status         LockStatus @default(ACTIVE)
+  reason         String?
+  expiresAt      DateTime   @map("expires_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  org      Org   @relation(fields: [orgId], references: [id])
+  unit     Unit  @relation(fields: [unitId], references: [id])
+  lockedBy User  @relation("LockedByUser", fields: [lockedByUserId], references: [id])
+  deal     Deal? @relation(fields: [dealId], references: [id])
+
+  @@unique([unitId, status], map: "unit_locks_unit_id_active_unique")
+  @@index([orgId, status, expiresAt])
+  @@map("unit_locks")
+}
+
+model Lead {
+  id              String    @id @default(uuid()) @db.Uuid
+  orgId           String    @map("org_id") @db.Uuid
+  projectId       String?   @map("project_id") @db.Uuid
+  ownerUserId     String?   @map("owner_user_id") @db.Uuid
+  name            String
+  phoneRaw        String?   @map("phone_raw")
+  phoneE164       String?   @map("phone_e164")
+  email           String?
+  source          String?
+  campaign        String?
+  stage           LeadStage @default(NEW)
+  priority        Int       @default(0)
+  lastContactedAt DateTime? @map("last_contacted_at")
+  nextFollowupAt  DateTime? @map("next_followup_at")
+  tags            Json?     @db.JsonB
+  notes           String?
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  org     Org      @relation(fields: [orgId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+  owner   User?    @relation("LeadOwner", fields: [ownerUserId], references: [id])
+
+  deals    Deal[]
+  tasks    Task[]    @relation("LeadTasks")
+  messages Message[] @relation("LeadMessages")
+
+  @@index([orgId, stage])
+  @@index([orgId, deletedAt])
+  @@map("leads")
+}
+
+model Buyer {
+  id         String   @id @default(uuid()) @db.Uuid
+  orgId      String   @map("org_id") @db.Uuid
+  name       String
+  phoneE164  String?  @map("phone_e164")
+  email      String?
+  identityNo String?  @map("identity_no")
+  address    Json?    @db.JsonB
+  metadata   Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  org   Org    @relation(fields: [orgId], references: [id])
+  deals Deal[]
+
+  @@map("buyers")
+}
+
+model Deal {
+  id             String    @id @default(uuid()) @db.Uuid
+  orgId          String    @map("org_id") @db.Uuid
+  projectId      String    @map("project_id") @db.Uuid
+  unitId         String?   @map("unit_id") @db.Uuid
+  leadId         String?   @map("lead_id") @db.Uuid
+  buyerId        String?   @map("buyer_id") @db.Uuid
+  assignedUserId String?   @map("assigned_user_id") @db.Uuid
+  stage          DealStage @default(RESERVED)
+  pricing        Json?     @db.JsonB
+  customFields   Json?     @map("custom_fields") @db.JsonB
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  org      Org      @relation(fields: [orgId], references: [id])
+  project  Project  @relation(fields: [projectId], references: [id])
+  unit     Unit?    @relation(fields: [unitId], references: [id])
+  lead     Lead?    @relation(fields: [leadId], references: [id])
+  buyer    Buyer?   @relation(fields: [buyerId], references: [id])
+  assignee User?    @relation("DealAssignee", fields: [assignedUserId], references: [id])
+
+  locks    UnitLock[]
+  docs     DealDoc[]
+  payments Payment[]
+  tasks    Task[]    @relation("DealTasks")
+  messages Message[] @relation("DealMessages")
+
+  @@index([orgId, stage])
+  @@index([orgId, createdAt])
+  @@map("deals")
+}
+
+model DocType {
+  id         String   @id @default(uuid()) @db.Uuid
+  orgId      String   @map("org_id") @db.Uuid
+  projectId  String?  @map("project_id") @db.Uuid
+  name       String
+  isRequired Boolean  @default(true) @map("is_required")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  org     Org      @relation(fields: [orgId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+  docs    DealDoc[]
+
+  @@map("doc_types")
+}
+
+model DealDoc {
+  id               String    @id @default(uuid()) @db.Uuid
+  orgId            String    @map("org_id") @db.Uuid
+  dealId           String    @map("deal_id") @db.Uuid
+  docTypeId        String    @map("doc_type_id") @db.Uuid
+  fileUrl          String?   @map("file_url")
+  fileName         String?   @map("file_name")
+  status           DocStatus @default(MISSING)
+  verifiedByUserId String?   @map("verified_by_user_id") @db.Uuid
+  verifiedAt       DateTime? @map("verified_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  org        Org     @relation(fields: [orgId], references: [id])
+  deal       Deal    @relation(fields: [dealId], references: [id])
+  docType    DocType @relation(fields: [docTypeId], references: [id])
+  verifiedBy User?   @relation("DocVerifier", fields: [verifiedByUserId], references: [id])
+
+  @@map("deal_docs")
+}
+
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  orgId            String        @map("org_id") @db.Uuid
+  dealId           String        @map("deal_id") @db.Uuid
+  type             PaymentType
+  amount           Decimal       @db.Decimal(14, 2)
+  paidAt           DateTime?     @map("paid_at")
+  referenceNo      String?       @map("reference_no")
+  receiptFileUrl   String?       @map("receipt_file_url")
+  status           PaymentStatus @default(SUBMITTED)
+  verifiedByUserId String?       @map("verified_by_user_id") @db.Uuid
+  verifiedAt       DateTime?     @map("verified_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  org        Org   @relation(fields: [orgId], references: [id])
+  deal       Deal  @relation(fields: [dealId], references: [id])
+  verifiedBy User? @relation("PaymentVerifier", fields: [verifiedByUserId], references: [id])
+
+  @@map("payments")
+}
+
+model Task {
+  id             String     @id @default(uuid()) @db.Uuid
+  orgId          String     @map("org_id") @db.Uuid
+  leadId         String?    @map("lead_id") @db.Uuid
+  dealId         String?    @map("deal_id") @db.Uuid
+  assignedUserId String     @map("assigned_user_id") @db.Uuid
+  type           TaskType
+  title          String
+  description    String?
+  dueAt          DateTime   @map("due_at")
+  status         TaskStatus @default(OPEN)
+  completedAt    DateTime?  @map("completed_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  org      Org   @relation(fields: [orgId], references: [id])
+  lead     Lead? @relation("LeadTasks", fields: [leadId], references: [id])
+  deal     Deal? @relation("DealTasks", fields: [dealId], references: [id])
+  assignee User  @relation("TaskAssignee", fields: [assignedUserId], references: [id])
+
+  @@map("tasks")
+}
+
+model Activity {
+  id          String             @id @default(uuid()) @db.Uuid
+  orgId       String             @map("org_id") @db.Uuid
+  entityType  ActivityEntityType @map("entity_type")
+  entityId    String             @map("entity_id") @db.Uuid
+  type        ActivityType
+  data        Json?              @db.JsonB
+  actorUserId String?            @map("actor_user_id") @db.Uuid
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  org   Org   @relation(fields: [orgId], references: [id])
+  actor User? @relation("ActivityActor", fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([orgId, createdAt])
+  @@map("activities")
+}
+
+model Message {
+  id                String           @id @default(uuid()) @db.Uuid
+  orgId             String           @map("org_id") @db.Uuid
+  leadId            String?          @map("lead_id") @db.Uuid
+  dealId            String?          @map("deal_id") @db.Uuid
+  channel           MessageChannel
+  direction         MessageDirection
+  fromPhoneE164     String?          @map("from_phone_e164")
+  toPhoneE164       String?          @map("to_phone_e164")
+  content           String
+  templateId        String?          @map("template_id") @db.Uuid
+  provider          String?
+  providerMessageId String?          @map("provider_message_id")
+  deliveryStatus    DeliveryStatus?  @map("delivery_status")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  org      Org              @relation(fields: [orgId], references: [id])
+  lead     Lead?            @relation("LeadMessages", fields: [leadId], references: [id])
+  deal     Deal?            @relation("DealMessages", fields: [dealId], references: [id])
+  template MessageTemplate? @relation(fields: [templateId], references: [id])
+
+  @@map("messages")
+}
+
+model MessageTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  projectId String?  @map("project_id") @db.Uuid
+  name      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  org      Org       @relation(fields: [orgId], references: [id])
+  project  Project?  @relation(fields: [projectId], references: [id])
+  messages Message[]
+
+  @@map("message_templates")
+}
+
+model Approval {
+  id                String             @id @default(uuid()) @db.Uuid
+  orgId             String             @map("org_id") @db.Uuid
+  type              ApprovalType
+  status            ApprovalStatus     @default(PENDING)
+  requestedByUserId String             @map("requested_by_user_id") @db.Uuid
+  approvedByUserId  String?            @map("approved_by_user_id") @db.Uuid
+  entityType        ApprovalEntityType @map("entity_type")
+  entityId          String             @map("entity_id") @db.Uuid
+  requestData       Json?              @map("request_data") @db.JsonB
+  decisionData      Json?              @map("decision_data") @db.JsonB
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  org         Org   @relation(fields: [orgId], references: [id])
+  requestedBy User  @relation("ApprovalRequester", fields: [requestedByUserId], references: [id])
+  approvedBy  User? @relation("ApprovalDecider", fields: [approvedByUserId], references: [id])
+
+  @@map("approvals")
+}
