@@ -3,6 +3,33 @@ import prisma from "@/lib/db"
 import { requireAuth, apiError, apiSuccess } from "@/lib/auth-utils"
 import { logActivity } from "@/lib/activity-logger"
 
+export async function GET(req: NextRequest) {
+  try {
+    const user = await requireAuth()
+    const { searchParams } = new URL(req.url)
+    const limit = parseInt(searchParams.get("limit") || "50")
+    const page = parseInt(searchParams.get("page") || "1")
+
+    const [messages, total] = await Promise.all([
+      prisma.message.findMany({
+        where: { orgId: user.orgId },
+        include: {
+          lead: { select: { id: true, name: true, phoneE164: true } },
+          template: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.message.count({ where: { orgId: user.orgId } }),
+    ])
+
+    return apiSuccess({ messages, total, page, limit })
+  } catch (error: any) {
+    return apiError(error.message, error.message === "Unauthorized" ? 401 : 500)
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
@@ -16,7 +43,7 @@ export async function POST(req: NextRequest) {
         channel: body.channel || "WHATSAPP",
         direction: body.direction || "OUTBOUND",
         fromPhoneE164: body.fromPhone || null,
-        toPhoneE164: body.toPhone || null,
+        toPhoneE164: body.toPhoneE164 || body.toPhone || null,
         content: body.content,
         templateId: body.templateId || null,
         deliveryStatus: "SENT",
@@ -31,7 +58,12 @@ export async function POST(req: NextRequest) {
         entityId: body.leadId,
         type: "MSG_LOGGED",
         actorUserId: user.id,
-        data: { channel: body.channel, direction: body.direction, messageId: message.id },
+        data: {
+          channel: body.channel || "WHATSAPP",
+          direction: body.direction || "OUTBOUND",
+          messageId: message.id,
+          preview: body.content?.slice(0, 100),
+        },
       })
 
       // Update last contacted

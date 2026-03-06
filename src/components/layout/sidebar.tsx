@@ -1,13 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
   Building2,
   Grid3X3,
+  LayoutGrid,
   Users,
+  GitBranch,
   CheckSquare,
   Handshake,
   MessageSquare,
@@ -25,7 +27,9 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: Building2 },
   { href: "/units", label: "Units", icon: Grid3X3 },
+  { href: "/board", label: "Board", icon: LayoutGrid },
   { href: "/leads", label: "Leads", icon: Users },
+  { href: "/pipeline", label: "Pipeline", icon: GitBranch },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/deals", label: "Deals", icon: Handshake },
   { href: "/messages", label: "Messages", icon: MessageSquare },

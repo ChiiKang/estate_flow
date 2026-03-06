@@ -14,12 +14,13 @@ import {
   DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import {
-  Download, Upload, Loader2, Search, MoreHorizontal, Pencil,
+  Upload, Loader2, Search, MoreHorizontal, Pencil,
   ArrowRightLeft, Unlock, Trash2, LayoutGrid, TableIcon,
   Star, Share2, Clock,
 } from "lucide-react"
 import { formatCurrency, formatPSM } from "@/lib/utils"
-import { ImportDialog } from "@/components/import-dialog"
+import { ExcelImportDialog } from "@/components/excel-import-dialog"
+import { ExcelExportButton } from "@/components/excel-export-button"
 import { EditUnitDialog } from "@/components/units/edit-unit-dialog"
 import { DeleteUnitDialog } from "@/components/units/delete-unit-dialog"
 import { UnlockDialog } from "@/components/units/unlock-dialog"
@@ -260,13 +261,36 @@ export default function UnitsPage() {
             <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 className="w-4 h-4" />
             </Button>
+            <ExcelExportButton
+              data={units.map((u) => ({
+                unitNo: u.unitNo,
+                tower: u.tower,
+                floor: u.floor,
+                unitType: u.unitType,
+                sizeSqm: u.sizeSqm ? Number(u.sizeSqm) : "",
+                facing: u.facing ?? "",
+                basePrice: Number(u.basePrice),
+                currentPrice: Number(u.currentPrice),
+                status: u.status,
+                project: u.project?.name ?? "",
+              }))}
+              columns={[
+                { key: "unitNo", header: "Unit No" },
+                { key: "tower", header: "Tower" },
+                { key: "floor", header: "Floor" },
+                { key: "unitType", header: "Unit Type" },
+                { key: "sizeSqm", header: "Size (sqm)" },
+                { key: "facing", header: "Facing" },
+                { key: "basePrice", header: "Base Price" },
+                { key: "currentPrice", header: "Current Price" },
+                { key: "status", header: "Status" },
+                { key: "project", header: "Project" },
+              ]}
+              filename="units-export"
+            />
             <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">Import</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.open("/api/units/export", "_blank")}>
-              <Download className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Export</span>
             </Button>
           </div>
         </div>
@@ -492,12 +516,11 @@ export default function UnitsPage() {
         open={shareOpen}
         onOpenChange={setShareOpen}
       />
-      <ImportDialog
+      <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        title="Import Units from CSV"
-        endpoint="/api/units/import"
-        extraFormData={filters.projectId ? { projectId: filters.projectId } : undefined}
+        entityType="units"
+        projectId={filters.projectId || undefined}
         onSuccess={fetchUnits}
       />
     </>

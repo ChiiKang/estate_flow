@@ -32,9 +32,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Search, Upload, Download, Phone, Loader2 } from "lucide-react"
+import { Plus, Search, Upload, Phone, Loader2 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
-import { ImportDialog } from "@/components/import-dialog"
+import { ExcelImportDialog } from "@/components/excel-import-dialog"
+import { ExcelExportButton } from "@/components/excel-export-button"
 import { LeadBulkToolbar } from "@/components/leads/bulk-toolbar"
 import { BulkAssignDialog } from "@/components/leads/bulk-assign-dialog"
 import { BulkStageDialog } from "@/components/leads/bulk-stage-dialog"
@@ -266,10 +267,33 @@ export default function LeadsPage() {
               <Upload className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">Import</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => window.open("/api/leads/export", "_blank")}>
-              <Download className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Export</span>
-            </Button>
+            <ExcelExportButton
+              data={leads.map((l) => ({
+                name: l.name,
+                phone: l.phoneRaw ?? "",
+                email: l.email ?? "",
+                source: l.source ?? "",
+                stage: l.stage,
+                owner: l.owner?.name ?? "",
+                project: l.project?.name ?? "",
+                lastContacted: l.lastContactedAt
+                  ? new Date(l.lastContactedAt).toLocaleDateString()
+                  : "",
+                createdAt: new Date(l.createdAt).toLocaleDateString(),
+              }))}
+              columns={[
+                { key: "name", header: "Name" },
+                { key: "phone", header: "Phone" },
+                { key: "email", header: "Email" },
+                { key: "source", header: "Source" },
+                { key: "stage", header: "Stage" },
+                { key: "owner", header: "Owner" },
+                { key: "project", header: "Project" },
+                { key: "lastContacted", header: "Last Contacted" },
+                { key: "createdAt", header: "Created At" },
+              ]}
+              filename="leads-export"
+            />
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">
@@ -452,11 +476,10 @@ export default function LeadsPage() {
         </DialogContent>
       </Dialog>
 
-      <ImportDialog
+      <ExcelImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        title="Import Leads from CSV"
-        endpoint="/api/leads/import"
+        entityType="leads"
         onSuccess={fetchLeads}
       />
     </>
