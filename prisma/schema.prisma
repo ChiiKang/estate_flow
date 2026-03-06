@@ -194,6 +194,7 @@ model Org {
   approvals        Approval[]
   unitNotes        UnitNote[]
   apiKeys          ApiKey[]
+  notifications    Notification[]
 
   @@map("orgs")
 }
@@ -224,6 +225,7 @@ model User {
   decidedApprovals   Approval[]   @relation("ApprovalDecider")
   unitNotes          UnitNote[]   @relation("UnitNoteAuthor")
   favorites          UserFavorite[] @relation("UserFavorites")
+  notifications      Notification[] @relation("NotificationRecipient")
 
   @@unique([orgId, email])
   @@map("users")
@@ -618,4 +620,23 @@ model ApiKey {
   @@index([keyHash])
   @@index([orgId, revokedAt])
   @@map("api_keys")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  orgId     String    @map("org_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  org  Org  @relation(fields: [orgId], references: [id])
+  user User @relation("NotificationRecipient", fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([orgId, createdAt])
+  @@map("notifications")
 }
