@@ -14,6 +14,7 @@ interface ChatPanelProps {
   onSend: () => void
   onClose: () => void
   loading: boolean
+  isOpen?: boolean
 }
 
 const STARTER_QUESTIONS = [
@@ -30,6 +31,7 @@ export function ChatPanel({
   onSend,
   onClose,
   loading,
+  isOpen = true,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -42,11 +44,14 @@ export function ChatPanel({
   return (
     <div
       className={cn(
-        "fixed bottom-20 right-4 sm:right-6 z-50",
+        "fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50",
         "w-[calc(100vw-2rem)] sm:w-[400px] h-[min(600px,calc(100vh-120px))]",
         "bg-cream-50 rounded-2xl shadow-2xl border border-tan-200",
         "flex flex-col overflow-hidden",
-        "animate-in slide-in-from-bottom-4 fade-in duration-200"
+        "transition-all duration-300 ease-out origin-bottom-right",
+        isOpen
+          ? "scale-100 opacity-100 translate-y-0"
+          : "scale-50 opacity-0 translate-y-8 pointer-events-none"
       )}
     >
       {/* Header */}

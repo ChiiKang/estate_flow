@@ -1,16 +1,31 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { MessageCircle } from "lucide-react"
+import { useState, useCallback, useEffect } from "react"
+import { MessageCircle, X } from "lucide-react"
 import { ChatPanel } from "./chat-panel"
 import type { ChatMessage, StreamEvent, TraceStep } from "@/types/chat"
 import { cn } from "@/lib/utils"
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false)
+  const [animating, setAnimating] = useState(false)
+  const [visible, setVisible] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
+
+  // Handle open/close with animation
+  function handleOpen() {
+    setVisible(true)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setOpen(true))
+    })
+  }
+
+  function handleClose() {
+    setOpen(false)
+    setTimeout(() => setVisible(false), 300)
+  }
 
   const handleSend = useCallback(async () => {
     const text = input.trim()
@@ -138,31 +153,32 @@ export function ChatWidget() {
   return (
     <>
       {/* Floating Action Button */}
-      {!open && (
-        <button
-          onClick={() => setOpen(true)}
-          className={cn(
-            "fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50",
-            "w-14 h-14 rounded-full shadow-lg",
-            "bg-sage-600 hover:bg-sage-700 text-white",
-            "flex items-center justify-center",
-            "transition-all duration-200 hover:scale-105 active:scale-95",
-            "animate-in fade-in zoom-in duration-200"
-          )}
-        >
-          <MessageCircle className="w-6 h-6" />
-        </button>
-      )}
+      <button
+        onClick={handleOpen}
+        className={cn(
+          "fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50",
+          "w-14 h-14 rounded-full shadow-lg",
+          "bg-sage-600 hover:bg-sage-700 text-white",
+          "flex items-center justify-center",
+          "transition-all duration-300 ease-out",
+          open
+            ? "scale-0 opacity-0 pointer-events-none rotate-90"
+            : "scale-100 opacity-100 rotate-0 hover:scale-110 active:scale-95 hover:shadow-xl"
+        )}
+      >
+        <MessageCircle className="w-6 h-6" />
+      </button>
 
-      {/* Chat Panel */}
-      {open && (
+      {/* Chat Panel — always mounted when visible, animated via CSS */}
+      {visible && (
         <ChatPanel
           messages={messages}
           input={input}
           onInputChange={setInput}
           onSend={handleSend}
-          onClose={() => setOpen(false)}
+          onClose={handleClose}
           loading={loading}
+          isOpen={open}
         />
       )}
     </>

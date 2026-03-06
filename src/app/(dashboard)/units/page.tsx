@@ -69,6 +69,7 @@ export default function UnitsPage() {
   const [filters, setFilters] = useState({ projectId: "", status: "", search: "" })
   const [importOpen, setImportOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"table" | "floor">("table")
+  const [selectedTower, setSelectedTower] = useState("")
 
   // Dialog states
   const [editUnit, setEditUnit] = useState<Unit | null>(null)
@@ -304,14 +305,14 @@ export default function UnitsPage() {
           <Card className="p-4">
             <div className="mb-3">
               <Select
-                value={filters.projectId ? (towers.length > 0 ? towers[0] : "") : ""}
-                onValueChange={() => {}}
+                value={selectedTower || "all"}
+                onValueChange={(v) => setSelectedTower(v === "all" ? "" : v)}
               >
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="All Towers" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Towers</SelectItem>
+                  <SelectItem value="all">All Towers</SelectItem>
                   {towers.map((t) => (
                     <SelectItem key={t} value={t}>Tower {t}</SelectItem>
                   ))}
@@ -320,7 +321,7 @@ export default function UnitsPage() {
             </div>
             <FloorPlanView
               units={displayUnits}
-              selectedTower=""
+              selectedTower={selectedTower}
               onUnitClick={(id) => { setDetailId(id); setDetailOpen(true) }}
             />
           </Card>
