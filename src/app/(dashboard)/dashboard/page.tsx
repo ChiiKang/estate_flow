@@ -57,8 +57,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch("/api/dashboards/summary")
-      .then((res) => res.json())
-      .then(setData)
+      .then((res) => {
+        if (res.status === 401) {
+          window.location.href = "/login"
+          return null
+        }
+        if (!res.ok) throw new Error(`API error: ${res.status}`)
+        return res.json()
+      })
+      .then((d) => { if (d) setData(d) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
