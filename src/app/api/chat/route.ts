@@ -7,7 +7,12 @@ import OpenAI from "openai"
 
 const MAX_TOOL_ITERATIONS = 10
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured")
+  }
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+}
 
 export async function POST(req: Request) {
   let user
@@ -38,6 +43,7 @@ export async function POST(req: Request) {
       }
 
       try {
+        const openai = getOpenAIClient()
         // Build conversation for OpenAI o4-mini (reasoning model)
         // o4-mini uses "developer" role instead of "system"
         const messages: OpenAI.ChatCompletionMessageParam[] = [
