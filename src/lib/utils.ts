@@ -35,3 +35,14 @@ export function formatDateTime(date: Date | string) {
 export function formatPhone(phone: string) {
   return phone.replace(/(\+\d{1,2})(\d{2,3})(\d{3,4})(\d{4})/, '$1 $2-$3 $4')
 }
+
+export function formatPSM(price: number, sizeSqm: number) {
+  if (!sizeSqm || sizeSqm === 0) return "—"
+  return formatCurrency(price / sizeSqm)
+}
+
+export function formatPSF(price: number, sizeSqm: number) {
+  if (!sizeSqm || sizeSqm === 0) return "—"
+  const sqft = sizeSqm * 10.764
+  return formatCurrency(price / sqft)
+}

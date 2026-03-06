@@ -192,6 +192,7 @@ model Org {
   messages         Message[]
   messageTemplates MessageTemplate[]
   approvals        Approval[]
+  unitNotes        UnitNote[]
 
   @@map("orgs")
 }
@@ -220,6 +221,8 @@ model User {
   verifiedPayments   Payment[]    @relation("PaymentVerifier")
   requestedApprovals Approval[]   @relation("ApprovalRequester")
   decidedApprovals   Approval[]   @relation("ApprovalDecider")
+  unitNotes          UnitNote[]   @relation("UnitNoteAuthor")
+  favorites          UserFavorite[] @relation("UserFavorites")
 
   @@unique([orgId, email])
   @@map("users")
@@ -283,17 +286,21 @@ model Unit {
   currentPrice Decimal    @map("current_price") @db.Decimal(14, 2)
   status       UnitStatus @default(AVAILABLE)
   metadata     Json?      @db.JsonB
+  deletedAt    DateTime?  @map("deleted_at")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   org     Org     @relation(fields: [orgId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
 
-  locks UnitLock[]
-  deals Deal[]
+  locks     UnitLock[]
+  deals     Deal[]
+  notes     UnitNote[]
+  favorites UserFavorite[]
 
   @@unique([projectId, tower, floor, unitNo])
   @@index([orgId, status])
+  @@index([orgId, deletedAt])
   @@map("units")
 }
 
@@ -541,6 +548,34 @@ model MessageTemplate {
   messages Message[]
 
   @@map("message_templates")
+}
+
+model UnitNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  unitId    String   @map("unit_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  org  Org  @relation(fields: [orgId], references: [id])
+  unit Unit @relation(fields: [unitId], references: [id])
+  user User @relation("UnitNoteAuthor", fields: [userId], references: [id])
+
+  @@index([unitId, createdAt])
+  @@map("unit_notes")
+}
+
+model UserFavorite {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  unitId String @map("unit_id") @db.Uuid
+
+  user User @relation("UserFavorites", fields: [userId], references: [id])
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@unique([userId, unitId])
+  @@map("user_favorites")
 }
 
 model Approval {

@@ -11,14 +11,23 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status")
     const tower = searchParams.get("tower")
     const unitType = searchParams.get("unitType")
+    const search = searchParams.get("search")
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
 
-    const where: any = { orgId: user.orgId }
+    const where: any = { orgId: user.orgId, deletedAt: null }
     if (projectId) where.projectId = projectId
     if (status) where.status = status
     if (tower) where.tower = tower
     if (unitType) where.unitType = unitType
+    if (search) {
+      where.OR = [
+        { unitNo: { contains: search, mode: "insensitive" } },
+        { tower: { contains: search, mode: "insensitive" } },
+        { floor: { contains: search, mode: "insensitive" } },
+        { unitType: { contains: search, mode: "insensitive" } },
+      ]
+    }
 
     const [units, total] = await Promise.all([
       prisma.unit.findMany({
