@@ -22,6 +22,14 @@ enum ProjectStatus {
   INACTIVE
 }
 
+enum ProjectType {
+  CONDO
+  APARTMENT
+  LANDED_HOUSE
+  TOWNSHIP
+  MIXED
+}
+
 enum UnitStatus {
   AVAILABLE
   RESERVED
@@ -98,6 +106,7 @@ enum ActivityEntityType {
   LEAD
   DEAL
   UNIT
+  PROJECT
 }
 
 enum ActivityType {
@@ -230,13 +239,24 @@ model Team {
 }
 
 model Project {
-  id        String        @id @default(uuid()) @db.Uuid
-  orgId     String        @map("org_id") @db.Uuid
-  name      String
-  location  String?
-  status    ProjectStatus @default(ACTIVE)
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
+  id             String        @id @default(uuid()) @db.Uuid
+  orgId          String        @map("org_id") @db.Uuid
+  name           String
+  location       String?
+  status         ProjectStatus @default(ACTIVE)
+  developer      String?
+  description    String?       @db.Text
+  projectType    ProjectType?  @map("project_type")
+  launchDate     DateTime?     @map("launch_date")
+  completionDate DateTime?     @map("completion_date")
+  totalPhases    Int?          @map("total_phases")
+  priceMin       Decimal?      @map("price_min") @db.Decimal(14, 2)
+  priceMax       Decimal?      @map("price_max") @db.Decimal(14, 2)
+  coverImage     String?       @map("cover_image")
+  metadata       Json?         @db.JsonB
+  deletedAt      DateTime?     @map("deleted_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
   org              Org               @relation(fields: [orgId], references: [id])
   units            Unit[]
@@ -245,6 +265,7 @@ model Project {
   docTypes         DocType[]
   messageTemplates MessageTemplate[]
 
+  @@index([orgId, deletedAt])
   @@map("projects")
 }
 
